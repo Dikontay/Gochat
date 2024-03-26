@@ -1,2 +1,2 @@
 generate :
-	 protoc --go_out=. --go-grpc_out=. hello.proto
+	 protoc --go_out=. --go-grpc_out=. proto/chat.proto
