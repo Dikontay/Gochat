@@ -1,95 +1,83 @@
 package main
 
 import (
-	"Gochat/gen"
-	"context"
-	"fmt"
-	"google.golang.org/grpc"
+	"github.com/gorilla/websocket"
+	"github.com/julienschmidt/httprouter"
 	"log"
-	"net"
-	"sync"
+	"net/http"
 )
 
-type Connection struct {
-	gen.UnimplementedBroadcastServer
-	stream gen.Broadcast_CreateStreamServer
-	id     string
-	active bool
-	error  chan error
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	// Allow connections from any Origin
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-type Pool struct {
-	gen.UnimplementedBroadcastServer
-	Connection []*Connection
+// Client holds info about connection
+type Client struct {
+	conn *websocket.Conn
 }
 
-func (p *Pool) CreateStream(pconn *gen.Connect, stream gen.Broadcast_CreateStreamServer) error {
-	conn := &Connection{
-		stream: stream,
-		id:     pconn.User.Id,
-		active: true,
-		error:  make(chan error),
-	}
-
-	p.Connection = append(p.Connection, conn)
-
-	return <-conn.error
+// Message represents a single message
+type Message struct {
+	Text string `json:"text"`
 }
 
-func (s *Pool) BroadcastMessage(ctx context.Context, msg *gen.Message) (*gen.Close, error) {
-	wait := sync.WaitGroup{}
-	done := make(chan int)
-
-	for _, conn := range s.Connection {
-		wait.Add(1)
-
-		go func(msg *gen.Message, conn *Connection) {
-			defer wait.Done()
-
-			if conn.active {
-				err := conn.stream.Send(msg)
-				fmt.Printf("Sending message to: %v from %v", conn.id, msg.Id)
-
-				if err != nil {
-					fmt.Printf("Error with Stream: %v - Error: %v\n", conn.stream, err)
-					conn.active = false
-					conn.error <- err
-				}
-			}
-		}(msg, conn)
-
-	}
-
-	go func() {
-		wait.Wait()
-		close(done)
-	}()
-
-	<-done
-	return &gen.Close{}, nil
-}
+var clients = make(map[*Client]bool) // connected clients
+var broadcast = make(chan Message)   // broadcast channel
 
 func main() {
+	router := httprouter.New()
+	router.GET("/ws", handleConnections)
 
-	grpcServer := grpc.NewServer()
+	go handleMessages()
 
-	var conn []*Connection
-
-	pool := &Pool{
-		Connection: conn,
-	}
-
-	gen.RegisterBroadcastServer(grpcServer, pool)
-
-	listener, err := net.Listen("tcp", ":8080")
-
+	log.Println("http server started on :8080")
+	err := http.ListenAndServe(":8080", router)
 	if err != nil {
-		log.Fatalf("Error creating the server %v", err)
+		log.Fatal("ListenAndServe: ", err)
 	}
+}
 
-	fmt.Println("Server started at port :8080")
+func handleConnections(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Upgrade initial GET request to a websocket
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Make sure we close the connection when the function returns
+	defer ws.Close()
 
-	if err := grpcServer.Serve(listener); err != nil {
-		log.Fatalf("Error creating the server %v", err)
+	client := &Client{conn: ws}
+	clients[client] = true
+
+	for {
+		var msg Message
+		// Read in a new message as JSON and map it to a Message object
+		err := ws.ReadJSON(&msg)
+		if err != nil {
+			log.Printf("error: %v", err)
+			delete(clients, client)
+			break
+		}
+		// Send the newly received message to the broadcast channel
+		broadcast <- msg
+	}
+}
+
+func handleMessages() {
+	for {
+		// Grab the next message from the broadcast channel
+		msg := <-broadcast
+		// Send it out to every client that is currently connected
+		for client := range clients {
+			err := client.conn.WriteJSON(msg)
+			if err != nil {
+				log.Printf("error: %v", err)
+				client.conn.Close()
+				delete(clients, client)
+			}
+		}
 	}
 }
