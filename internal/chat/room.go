@@ -1,8 +1,7 @@
-package room
+package chat
 
 import (
 	"github.com/gorilla/websocket"
-	"gochat/internal/client"
 	"log"
 	"net/http"
 )
@@ -13,9 +12,9 @@ const messageBufferSize = 256
 var upgrader = &websocket.Upgrader{ReadBufferSize: socketBufferSize, WriteBufferSize: messageBufferSize}
 
 type Room struct {
-	Clients map[*client.Client]bool
-	Join    chan *client.Client
-	Leave   chan *client.Client
+	Clients map[*Client]bool
+	Join    chan *Client
+	Leave   chan *Client
 	Forward chan []byte
 }
 
@@ -26,6 +25,7 @@ func (r *Room) Run() {
 			r.Clients[Client] = true
 		case Client := <-r.Leave:
 			delete(r.Clients, Client)
+			close(Client.Receive)
 		case msg := <-r.Forward:
 			for cli := range r.Clients {
 				cli.Receive <- msg
@@ -40,7 +40,7 @@ func (room *Room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		log.Fatal("ServeTTP:", err)
 		return
 	}
-	cli := &client.Client{
+	cli := &Client{
 		Receive: make(chan []byte, messageBufferSize),
 		Conn:    socket,
 		Room:    room,
@@ -53,4 +53,13 @@ func (room *Room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	go cli.Write()
 	cli.Read()
 
+}
+
+func NewRoom() *Room {
+	return &Room{
+		Forward: make(chan []byte),
+		Join:    make(chan *Client),
+		Leave:   make(chan *Client),
+		Clients: make(map[*Client]bool),
+	}
 }

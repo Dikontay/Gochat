@@ -1,8 +1,7 @@
-package client
+package chat
 
 import (
 	"github.com/gorilla/websocket"
-	"gochat/internal/room"
 )
 
 type Client struct {
@@ -10,7 +9,7 @@ type Client struct {
 
 	Receive chan []byte
 
-	Room *room.Room
+	Room *Room
 }
 
 func (c *Client) Read() {
