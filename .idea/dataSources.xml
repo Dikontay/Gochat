@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="gochat@localhost" uuid="329dbad2-1e1a-4949-ac1c-a71acec1923e">
+    <data-source source="LOCAL" name="gochat@localhost" uuid="a9271788-07b0-4815-9e12-0c20fec1abee">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.postgresql.Driver</jdbc-driver>
