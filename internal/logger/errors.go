@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"gochat/utils"
 	"log"
 	"net/http"
 )
@@ -19,7 +20,7 @@ type envelope map[string]any
 func (log Logger) ErrorResponse(w http.ResponseWriter, r *http.Request, status int, message any) {
 	env := envelope{"error": message}
 	// Write the response using the writeJSON() helper. If this happens to return an // error then log it, and fall back to sending the client an empty response with a // 500 Internal Server Error status code.
-	err := app.writeJSON(w, status, env, nil)
+	err := utils.WriteJSON(w, status, env, nil)
 	if err != nil {
 		log.LogError(r, err)
 		w.WriteHeader(500)

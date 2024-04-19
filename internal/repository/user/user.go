@@ -1,9 +1,11 @@
 package user
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"gochat/internal/models"
+	"time"
 )
 
 type UserStorage struct {
@@ -12,11 +14,13 @@ type UserStorage struct {
 
 type UserRepo interface {
 	CreateUser(user *models.User) error
-	Get(id int64) (*models.User, error)
+	GetByEmail(email string) (*models.User, error)
 	Update(user *models.User) error
+	Delete(id int64) error
 }
 
 var ErrRecordNotFound = errors.New("record not found")
+var ErrDuplicateEmail = errors.New("duplicate email")
 
 //ID        int       `json:"id"`
 //Username  string    `json:"username"`
@@ -25,24 +29,34 @@ var ErrRecordNotFound = errors.New("record not found")
 //CreatedAt time.Time `json:"-"`
 
 func (s UserStorage) CreateUser(user *models.User) error {
-	query := `INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, created_at`
+	query := `INSERT INTO users (username, email, password_hash, activated) VALUES ($1, $2, $3) RETURNING id, created_at`
 
 	args := []any{user.Username, user.Email, user.Password}
-	return s.DB.QueryRow(query, args).Scan(&user.ID, &user.Password)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := s.DB.QueryRowContext(ctx, query, args...).Scan(&user.ID, &user.CreatedAt)
+	if err != nil {
+		switch {
+		case err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"`:
+			return ErrDuplicateEmail
+		default:
+			return err
+		}
+	}
+
+	return s.DB.QueryRow(query, args).Scan(&user.ID, &user.CreatedAt)
 }
 
-func (m UserStorage) Get(id int64) (*models.User, error) {
-	if id < 1 {
-		return nil, ErrRecordNotFound
-	}
-	query := `SELECT id,username, email, password, year FROM users WHERE id = $1`
-
+func (m UserStorage) GetByEmail(email string) (*models.User, error) {
+	query := `
+SELECT id, created_at, name, email, password_hash, activated, version FROM users
+WHERE email = $1`
 	var user models.User
-	err := m.DB.QueryRow(query, id).Scan(
-		&user.ID,
-		&user.Username,
-		&user.CreatedAt,
-		&user.Password,
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := m.DB.QueryRowContext(ctx, query, email).Scan(&user.ID,
+		&user.CreatedAt, &user.Username, &user.Email, &user.Password.Hash, &user.Activated,
 	)
 	if err != nil {
 		switch {

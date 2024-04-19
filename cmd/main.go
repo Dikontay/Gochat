@@ -1,23 +1,22 @@
 package main
 
 import (
-	"github.com/joho/godotenv"
-	"gochat/internal/app"
+	"gochat/internal/handlers"
+	"gochat/pkg/db"
 	"log"
-	"os"
 )
 
 func main() {
-	err := godotenv.Load()
+	database, err := db.NewDatabase()
+
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal(err)
 	}
-	port := os.Getenv("PORT")
-	handler := app.Routes()
-	server := app.NewServer(port, handler)
+	application := handlers.NewApp(database.GetDB())
 
-	err = server.ListenAndServe()
-
-	log.Fatal(err)
+	err = application.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 }
