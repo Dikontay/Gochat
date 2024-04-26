@@ -29,9 +29,9 @@ var ErrDuplicateEmail = errors.New("duplicate email")
 //CreatedAt time.Time `json:"-"`
 
 func (s UserStorage) CreateUser(user *models.User) error {
-	query := `INSERT INTO users (username, email, password_hash, activated) VALUES ($1, $2, $3) RETURNING id, created_at`
+	query := `INSERT INTO users (username, email, password_hash, activated) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
 
-	args := []any{user.Username, user.Email, user.Password}
+	args := []interface{}{user.Username, user.Email, user.Password.Hash, user.Activated}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	err := s.DB.QueryRowContext(ctx, query, args...).Scan(&user.ID, &user.CreatedAt)
@@ -49,7 +49,7 @@ func (s UserStorage) CreateUser(user *models.User) error {
 
 func (m UserStorage) GetByEmail(email string) (*models.User, error) {
 	query := `
-SELECT id, created_at, name, email, password_hash, activated, version FROM users
+SELECT id, created_at, username, email, password_hash, activated FROM users
 WHERE email = $1`
 	var user models.User
 

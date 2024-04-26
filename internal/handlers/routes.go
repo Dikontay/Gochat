@@ -10,7 +10,8 @@ func (app *App) Routes() *httprouter.Router {
 
 	router.HandlerFunc(http.MethodGet, "/login", app.Login)
 	router.HandlerFunc(http.MethodPost, "/signup", app.SignUp)
-	//router.HandlerFunc(http.MethodPost, "/tokens/authentication", CreateAuthenticationToken)
+
+	router.HandlerFunc(http.MethodPost, "/tokens/authentication", app.CreateAuthenticationToken)
 
 	return router
 

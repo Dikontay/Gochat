@@ -19,6 +19,7 @@ func (app *App) SignUp(w http.ResponseWriter, r *http.Request) {
 	err := utils.ReadJSON(w, r, &input)
 	if err != nil {
 		app.Logger.BadRequestResponse(w, r, err)
+		return
 	}
 	user.Username = input.Username
 	user.Email = input.Email
@@ -40,6 +41,12 @@ func (app *App) SignUp(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	//token, err := app.Repo.Token.New(user.ID, 3*24*time.Hour, models.ScopeActivation)
+	//if err != nil {
+	//	app.Logger.ServerErrorResponse(w, r, err)
+	//	return
+	//}
 
 	err = utils.WriteJSON(w, http.StatusCreated, map[string]interface{}{"user": user}, nil)
 	if err != nil {
